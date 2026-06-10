@@ -257,13 +257,13 @@ function styles(fontFamily) {
       .row {
         display: grid;
         /* Dot first (left), then time, then title. Time column is
-           fixed at 14ch (a touch wider than the longest 12h range,
-           "3:45 - 4:45pm") so the time NEVER truncates, no matter
-           how the auto-fit scales the font. The wider, em-sized
-           column-gap also pushes the title rightwards a bit for a
-           cleaner column rhythm. */
-        grid-template-columns: 1.2em 14ch 1fr;
-        column-gap: 1.2em;
+           fixed at 13ch (snug fit for "3:45 - 4:45pm" and
+           "13:30 - 14:30", both ~13ch) so the time never truncates
+           while keeping wasted space minimal. column-gap halved from
+           v0.1.1 (1.2em -> 0.5em) on user feedback that the title
+           felt too far from the time. */
+        grid-template-columns: 1.2em 13ch 1fr;
+        column-gap: 0.5em;
         align-items: baseline;
         min-width: 0;
       }

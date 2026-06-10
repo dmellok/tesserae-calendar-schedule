@@ -125,8 +125,8 @@ function renderRow(ev, timeFormat) {
     : "";
   return `
     <li class="row">
-      <span class="row-time">${escapeHtml(timeStr)}</span>
       ${dot}
+      <span class="row-time">${escapeHtml(timeStr)}</span>
       <span class="row-title">${title}${location}</span>
     </li>
   `;
@@ -156,8 +156,8 @@ function formatTimeParts(iso, format) {
   if (format === "12h") {
     const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
     const suffix = h24 < 12 ? "am" : "pm";
-    // Always show minutes for consistency. "10:00am" not "10am".
-    const body = `${h12}:${pad2(m)}`;
+    // Drop minutes when zero (Google Calendar style): "6pm" not "6:00pm".
+    const body = m === 0 ? `${h12}` : `${h12}:${pad2(m)}`;
     return { body, suffix, label: `${body}${suffix}` };
   }
   // 24h
@@ -210,7 +210,7 @@ function styles(fontFamily) {
         gap: 0.9em;
         align-items: start;
         padding: 0.5em 0;
-        border-top: 1px solid var(--border, #E5E1D6);
+        border-top: 2px solid var(--border, #E5E1D6);
       }
       .day:first-child {
         border-top: 0;
@@ -256,11 +256,14 @@ function styles(fontFamily) {
       }
       .row {
         display: grid;
-        /* Time column sized in 'ch' so it scales with the font and
-           fits the longest 12h range (about 13ch). Dot column sized
-           in em so it never crowds the title at high zoom. */
-        grid-template-columns: minmax(6ch, 13ch) 1.2em 1fr;
-        column-gap: 0.7em;
+        /* Dot first (left), then time, then title. Time column is
+           fixed at 14ch (a touch wider than the longest 12h range,
+           "3:45 - 4:45pm") so the time NEVER truncates, no matter
+           how the auto-fit scales the font. The wider, em-sized
+           column-gap also pushes the title rightwards a bit for a
+           cleaner column rhythm. */
+        grid-template-columns: 1.2em 14ch 1fr;
+        column-gap: 1.2em;
         align-items: baseline;
         min-width: 0;
       }
@@ -269,8 +272,9 @@ function styles(fontFamily) {
         color: var(--muted, #76705E);
         font-size: 0.9em;
         white-space: nowrap;
-        text-overflow: ellipsis;
-        overflow: hidden;
+        /* No ellipsis: the user explicitly asked that the time never
+           truncate. The 14ch column above is sized so we don't need
+           an overflow fallback in practice. */
       }
       .row-dot {
         width: 0.65em;

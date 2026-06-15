@@ -229,9 +229,9 @@ function styles(fontFamily) {
            prevent overflow. */
         font-size: calc(clamp(0.85em, 2.8cqmin, 1.2em) * var(--auto-font-scale, 1));
         line-height: 1.3;
-        /* Flex column so the optional ``.title`` row sits at natural
-           height and ``.body`` takes whatever's left. ``fitToHeight``
-           targets ``.body.clientHeight`` for the scale calculation. */
+        /* Flex column so the optional title row sits at natural height
+           and the body area takes whatever's left. fitToHeight targets
+           body.clientHeight for the scale calculation. */
         display: flex;
         flex-direction: column;
         gap: clamp(2px, 0.6cqmin, 8px);

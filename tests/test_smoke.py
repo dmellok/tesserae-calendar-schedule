@@ -258,3 +258,91 @@ def test_feeds_filter_parses_comma_separated_list() -> None:
     assert server._parse_feeds_filter("a,b,c") == ["a", "b", "c"]
     assert server._parse_feeds_filter("a , b,  c  ") == ["a", "b", "c"]
     assert server._parse_feeds_filter("a,,b") == ["a", "b"]
+
+
+def test_max_events_total_caps_across_all_days() -> None:
+    """A single busy day shouldn't shrink the agenda to fit. The
+    total cap walks days in display order, fills until the budget runs
+    out, and signals via ``truncated=True`` so the client can show the
+    'capped' pill."""
+    app, _registry, core, _settings = _stub_app()
+    today = datetime.now(UTC).date()
+    tomorrow = today + timedelta(days=1)
+    core.server_module.load_events.return_value = [
+        # Eight events today
+        *[
+            {
+                "summary": f"today-{i}",
+                "start": f"{today.isoformat()}T{9 + i:02d}:00:00+00:00",
+                "end": f"{today.isoformat()}T{10 + i:02d}:00:00+00:00",
+                "all_day": False,
+                "feed_name": "y",
+                "feed_colour": "#abc",
+            }
+            for i in range(8)
+        ],
+        # Two events tomorrow
+        *[
+            {
+                "summary": f"tom-{i}",
+                "start": f"{tomorrow.isoformat()}T{9 + i:02d}:00:00+00:00",
+                "end": f"{tomorrow.isoformat()}T{10 + i:02d}:00:00+00:00",
+                "all_day": False,
+                "feed_name": "y",
+                "feed_colour": "#abc",
+            }
+            for i in range(2)
+        ],
+    ]
+    with patch.object(server, "current_app", app):
+        out = server.fetch(
+            options={"days_ahead": "2", "max_events_total": 5},
+            settings={},
+            ctx={},
+        )
+    # Total events across all days <= cap; today gets truncated, tomorrow drops.
+    total = sum(len(d["events"]) for d in out["days"])
+    assert total == 5
+    assert out["truncated"] is True
+    # First day still present and partially populated, second day dropped entirely.
+    assert len(out["days"]) == 1
+    assert len(out["days"][0]["events"]) == 5
+
+
+def test_max_events_total_zero_means_no_cap() -> None:
+    """0 leaves everything intact and never sets ``truncated``."""
+    app, _registry, core, _settings = _stub_app()
+    today = datetime.now(UTC).date()
+    core.server_module.load_events.return_value = [
+        {
+            "summary": f"event-{i}",
+            "start": f"{today.isoformat()}T{9 + i:02d}:00:00+00:00",
+            "end": f"{today.isoformat()}T{10 + i:02d}:00:00+00:00",
+            "all_day": False,
+            "feed_name": "y",
+            "feed_colour": "#abc",
+        }
+        for i in range(4)
+    ]
+    with patch.object(server, "current_app", app):
+        out = server.fetch(
+            options={"days_ahead": "1", "max_events_total": 0},
+            settings={},
+            ctx={},
+        )
+    assert sum(len(d["events"]) for d in out["days"]) == 4
+    assert out["truncated"] is False
+
+
+def test_show_title_defaults_to_true_and_is_forwarded() -> None:
+    """``show_title`` lands in the payload unchanged so client.js can
+    paint the chrome conditionally. Default is on (matches Spectra
+    widget convention)."""
+    app, _registry, _core, _settings = _stub_app()
+    with patch.object(server, "current_app", app):
+        default_out = server.fetch(options={"days_ahead": "1"}, settings={}, ctx={})
+        off_out = server.fetch(
+            options={"days_ahead": "1", "show_title": False}, settings={}, ctx={}
+        )
+    assert default_out["show_title"] is True
+    assert off_out["show_title"] is False

@@ -37,10 +37,14 @@ function scheduleAutoFit(shadow) {
 // blowing up the day-number out of proportion.
 function fitToHeight(shadow) {
   const frame = shadow.querySelector(".frame");
+  const body = shadow.querySelector(".body");
   const days = shadow.querySelector(".days");
-  if (!frame || !days) return;
+  if (!frame || !body || !days) return;
   frame.style.setProperty("--auto-font-scale", "1");
-  const target = frame.clientHeight;
+  // Body is the flex-1 area below the optional title row, so its
+  // clientHeight is the real available space for ``.days``. Using the
+  // frame's height includes the title and over-counted the target.
+  const target = body.clientHeight;
   const actual = days.scrollHeight;
   if (!target || !actual) return;
   let scale = 1;
@@ -60,11 +64,19 @@ function layout(data, fontFamily) {
   if (data && data.time_format && String(data.time_format).toLowerCase() === "auto") {
     data = { ...data, time_format: "12h" };
   }
+  // ``show_title`` defaults to true (matches the server default and
+  // the Spectra widget chrome convention). Old payloads without the
+  // field still render the title so the cell upgrade is visually
+  // consistent without re-editing every dashboard.
+  const showTitle = data.show_title !== false;
+  const truncated = !!data.truncated;
+  const titleHtml = showTitle ? renderTitle(truncated) : "";
   if (data.error) {
     return `
       ${styles(fontFamily)}
       <div class="frame">
-        <div class="error"><p>${escapeHtml(data.error)}</p></div>
+        ${titleHtml}
+        <div class="body"><div class="error"><p>${escapeHtml(data.error)}</p></div></div>
       </div>
     `;
   }
@@ -73,9 +85,12 @@ function layout(data, fontFamily) {
     return `
       ${styles(fontFamily)}
       <div class="frame">
-        <div class="empty">
-          <i class="ph ph-calendar-blank" aria-hidden="true"></i>
-          <p>No upcoming events.</p>
+        ${titleHtml}
+        <div class="body">
+          <div class="empty">
+            <i class="ph ph-calendar-blank" aria-hidden="true"></i>
+            <p>No upcoming events.</p>
+          </div>
         </div>
       </div>
     `;
@@ -84,9 +99,29 @@ function layout(data, fontFamily) {
   return `
     ${styles(fontFamily)}
     <div class="frame">
-      <ul class="days">
-        ${days.map((d) => renderDay(d, tf)).join("")}
-      </ul>
+      ${titleHtml}
+      <div class="body">
+        <ul class="days">
+          ${days.map((d) => renderDay(d, tf)).join("")}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+function renderTitle(truncated) {
+  // Mirrors the Spectra ``w-title`` chrome (icon + heading) using only
+  // the design tokens already in scope. The "+more" pill is visually
+  // small but does signal to the user that they're hitting the cap so
+  // they can lift it if they want.
+  const truncatedPill = truncated
+    ? `<span class="title-pill" title="More events were available; lift Max events across the whole agenda to show them.">capped</span>`
+    : "";
+  return `
+    <div class="title">
+      <i class="ph ph-list-bullets" aria-hidden="true"></i>
+      <span class="title-text">Schedule</span>
+      ${truncatedPill}
     </div>
   `;
 }
@@ -194,6 +229,47 @@ function styles(fontFamily) {
            prevent overflow. */
         font-size: calc(clamp(0.85em, 2.8cqmin, 1.2em) * var(--auto-font-scale, 1));
         line-height: 1.3;
+        /* Flex column so the optional ``.title`` row sits at natural
+           height and ``.body`` takes whatever's left. ``fitToHeight``
+           targets ``.body.clientHeight`` for the scale calculation. */
+        display: flex;
+        flex-direction: column;
+        gap: clamp(2px, 0.6cqmin, 8px);
+      }
+      .title {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+        font-size: 0.75em;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-secondary, var(--muted, #76705E));
+        padding-bottom: clamp(2px, 0.5cqmin, 6px);
+        border-bottom: 1px solid var(--border, #E5E1D6);
+      }
+      .title i {
+        font-size: 1.15em;
+        color: var(--accent-1, var(--accent, #C24F2C));
+      }
+      .title-text {
+        flex: 1 1 auto;
+      }
+      .title-pill {
+        flex: 0 0 auto;
+        font-size: 0.7em;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        padding: 0.1em 0.5em;
+        border-radius: 999px;
+        background: var(--surface-sunken, color-mix(in oklab, var(--text-primary, #1B1A16) 8%, transparent));
+        color: var(--text-primary, #1B1A16);
+      }
+      .body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
       }
       .days {
         list-style: none;

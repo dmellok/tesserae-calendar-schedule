@@ -98,6 +98,11 @@ def fetch(
         max_per_day = max(0, int(options.get("max_events_per_day") or 0))
     except (TypeError, ValueError):
         max_per_day = 0
+    try:
+        max_total = max(0, int(options.get("max_events_total") or 0))
+    except (TypeError, ValueError):
+        max_total = 0
+    show_title = bool(options.get("show_title", True))
 
     tz = _resolve_local_tz()
     now_local = datetime.now(tz)
@@ -176,12 +181,37 @@ def fetch(
             }
         )
 
+    # Apply the across-all-days cap after per-day filtering + chronological
+    # ordering. Walk days in display order, accumulating event counts;
+    # truncate the day that hits the cap and drop subsequent days. Days
+    # whose full event list survives stay intact.
+    truncated = False
+    if max_total > 0:
+        running = 0
+        capped: list[dict[str, Any]] = []
+        for day in days_out:
+            room = max_total - running
+            if room <= 0:
+                truncated = True
+                break
+            events = day["events"]
+            if len(events) <= room:
+                capped.append(day)
+                running += len(events)
+                continue
+            capped.append({**day, "events": events[:room]})
+            truncated = True
+            break
+        days_out = capped
+
     return {
         "now": now_local.isoformat(),
         "tz": str(tz),
         "time_format": time_format,
         "show_location": show_location,
         "show_dot_color": show_dot_color,
+        "show_title": show_title,
         "days": days_out,
         "count": sum(len(d["events"]) for d in days_out),
+        "truncated": truncated,
     }
